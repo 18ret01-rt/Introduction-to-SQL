@@ -1,0 +1,91 @@
+---
+title: "5508 module04"
+author: "Reagan Todd"
+format: 
+  html:
+    embed-resources: true
+execute: 
+  error: true
+---
+
+This program (created 2026-02-10 by Reagan Todd) shows a brief introduction to [null values][ref01] in SQL. This belongs in the public domain so please use however you see fit.
+
+[ref01]: https://www.coginiti.co/tutorials/beginner/sql-is-null/
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+R.version.string
+Sys.Date()
+library(tidyverse)
+library(DBI)
+library(RSQLite)
+library(readr)
+```
+## creating the MIMIC III database from the demo folder 
+### create a new SQLite database file for patients table
+```{r}
+con <- dbConnect(SQLite(), "mimic_demo.db")
+
+patients <- read_csv(
+  "~/Documents/Spring 26/MEDB-5530/data/mimic-iii-demo/PATIENTS.csv"
+)
+
+dbWriteTable(con, "patients", patients, overwrite = TRUE)
+```
+
+# Q1. Verify that gender in patients table has no missing values
+```{r}
+#| label: patient_gender
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+patients <- dbGetQuery(conn=cox, "
+    select *
+    from patients
+    where gender is null;
+")
+patients
+dbDisconnect(cox)
+```
+### The output of 0 rows confirms that there are no missing values for gender in the patient table.  
+
+# Q2. Count the number of missing values for dod_ssn in patients table
+```{r}
+#| label: patient_dod_ssn
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+patients <- dbGetQuery(conn=cox, "
+    select *
+    from patients
+    where dod_ssn is null;
+")
+patients
+dbDisconnect(cox)
+```
+### There are 23 rows for dod_ssn where there is a null value. This means there are 23 missing or null values for dod_ssn in the patients table. 
+
+## To answer Q3, we need to load in the DRGCODES.csv into the database. 
+```{r}
+con <- dbConnect(SQLite(), "mimic_demo.db")
+
+drug_codes <- read_csv(
+  "~/Documents/Spring 26/MEDB-5530/data/mimic-iii-demo/DRGCODES.csv"
+)
+
+dbWriteTable(con, "drug_codes", drug_codes, overwrite = TRUE)
+```
+
+# Q3. Find the drg_code of the drgcodes table where drg_severity is null.
+```{r}
+#| label: drug_severity
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+drug_codes <- dbGetQuery(conn=cox, "
+    select 
+      drg_code,
+      drg_severity
+    from drug_codes
+    where drg_severity is null;
+")
+drug_codes
+dbDisconnect(cox)
+```
+### There are 129 null or missing values for drug severity and listed above are the drug codes (drg_code) for those missing drug severities. 

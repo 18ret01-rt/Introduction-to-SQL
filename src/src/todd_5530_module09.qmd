@@ -1,0 +1,175 @@
+---
+title: "todd-5530-m9"
+author: "Reagan Todd"
+format:
+  html:
+    embed-resources: true
+execute: 
+  error: true
+---
+### This is a demonstration of how to find mismatches in SQL.                                         Created 2026-04-03 by Reagan Todd.                                                                       The copyright is for educational uses only.
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+R.version.string
+Sys.Date()
+library(tidyverse)
+library(DBI)
+library(RSQLite)
+library(readr)
+```
+
+# Use the MIMIC III database.
+# Q1. Do an inner join of diagnoses_icd and admissions table to find matching diagnoses & admissions. Display the first ten rows of data only.
+Use tables
+diagnoses_icd  Diagnosis codes per admission (subject_id, hadm_id)
+admissions  Admission info (subject_id, hadm_id, admittime, etc.)
+use hadm_id to join the tables and detect mismatches.
+## First we ensure out database is set to use
+```{r}
+#| label: checking-database
+con <- dbConnect(SQLite(), "mimic_demo.db")
+
+diagnosis <- read_csv(
+  "~/Documents/Spring 26/MEDB-5530/data/mimic-iii-demo/DIAGNOSES_ICD.csv"
+)
+
+dbWriteTable(con, "diagnosis", diagnosis, overwrite = TRUE)
+
+admissions <- read_csv(
+  "~/Documents/Spring 26/MEDB-5530/data/mimic-iii-demo/ADMISSIONS.csv"
+)
+
+dbWriteTable(con, "admissions", admissions, overwrite = TRUE)
+glimpse(admissions)
+glimpse(diagnosis)
+```
+
+## Now we can answer the question 
+```{r}
+#| label: matches
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+matches <- dbGetQuery(con, "
+SELECT 
+    d.subject_id,
+    d.hadm_id,
+    d.icd9_code,
+    datetime(a.admittime, 'unixepoch') AS admittime_dt
+FROM diagnosis d
+INNER JOIN admissions a
+    ON d.hadm_id = a.hadm_id;
+")
+
+glimpse(matches)
+dbDisconnect(cox)
+```
+#### Interpretation of the code
+Same as Module 6, we have to convert the unixepoch date into a format that we
+as humans can easily identify, that is why we created the admittime_dt to see
+exactly what date that patient was admitted. 
+
+## To find the number of matching records
+```{r}
+#| label: matches2
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+matches_count <- dbGetQuery(con, "
+SELECT COUNT(*) AS total_matches
+FROM diagnosis d
+INNER JOIN admissions a
+    ON d.hadm_id = a.hadm_id;
+")
+
+matches_count
+dbDisconnect(cox)
+```
+### Interpretation of output
+We can see the first 10 rows of the data from the first chunk of code, and using 
+the second we can see that we were able to obtain 1,761 matching records. Since 
+we used an inner join, we can calculate the number of mismatches that the join
+omitted:
+```{r}
+#| label: mismatch_count1
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+mismatch_count1 <- dbGetQuery(con, "
+SELECT COUNT(*) AS total_diagnosis FROM diagnosis
+")
+
+mismatch_count1
+dbDisconnect(cox)
+```
+### Interpretation of this output
+With a row total of 1,761 for the total diagnosis, it looks like there were no
+mismatches between the diagnosis table and admissions table.
+
+# Q2 Write a sql program to select all Diagnoses and Admissions using diagnoses_icd and admissions  table. Hint: Use Full Outer join.
+```{r}
+#| label: full-outer
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+full_outer <- dbGetQuery(con, "
+SELECT 
+    d.*,
+    a.* 
+FROM diagnosis d
+LEFT JOIN admissions a
+    ON d.hadm_id = a.hadm_id
+
+UNION
+
+SELECT 
+    d.*,
+    a.*
+FROM admissions a
+LEFT JOIN diagnosis d
+    ON d.hadm_id = a.hadm_id
+")
+
+head(full_outer, 10)
+dbDisconnect(cox)
+
+```
+
+#### Interpretation of code
+We use the [union][ref01] term here, this term allows us to use two select 
+statements which combines those queries and removes duplicates. This is 
+primarily useful in R Quarto where a SQL query does not allow for a traditional
+full outer join.
+
+[ref01]: https://www.geeksforgeeks.org/sql/sql-union-operator/
+
+
+### Interpretation of the output
+Here we can see that we now have 24 columns (limited to 10 rows) of patient data
+using a full outer join to join the admissions and diagnosis data sets. We
+will have 1,761 observations or rows and 24 columns. 
+
+# Q3 Which join can be used to detect all match and mismatch cases.
+### Answer to question 3
+A full outer join as done in question 2 allows us to detect all matches and mis-
+matches due to its ability to join all of the data regardless of a match in the
+next table. 
+
+# Q4. Which patients(or subject_id) appear in both admissions and diagnoses_icd? Hint use two select statements and the intersect statement.
+```{r}
+#| label: intersect
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+intersect <- dbGetQuery(con, "
+SELECT DISTINCT subject_id
+FROM admissions
+
+INTERSECT
+
+SELECT DISTINCT subject_id
+FROM diagnosis;
+")
+glimpse(intersect)
+dbDisconnect(cox)
+```
+#### Interpretation of the code 
+Here we used the [intersect][ref02] term which allows us to return only the 
+records that were found within both select statements. This essentially shows
+us what is in the center of a vendiagram. 
+
+### Interpretation of the output
+We have 100 patients who appear both in the diagnosis and admissions data. 

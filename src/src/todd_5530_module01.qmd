@@ -1,0 +1,100 @@
+---
+title: "5508 module01"
+author: "Reagan Todd"
+format: 
+  html:
+    embed-resources: true
+execute: 
+  error: true
+---
+
+This program (created 2026-01-28 by Reagan Todd) shows a brief introduction to the [MIMIC III demo][ref01] database and how to use the SELECT function as well as how to rename field names. This belongs in the public domain so please use however you see fit.
+
+[ref01]: https://physionet.org/content/mimiciii-demo/1.4/
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+R.version.string
+Sys.Date()
+library(tidyverse)
+library(DBI)
+library(RSQLite)
+library(readr)
+```
+### resources on the libaries
+[tidyverse][ref02] is a package that contains various important libraries and by loading this libary, we are able to harness all of the core packages tidyverse offers (ggplot, tidyr, readr, etc.) without manually doing this. 
+[DBI][ref03] stands for database interface, which allows us to connect databases within R. There is a great article on the specifics of DBI as the [RSQLite][ref03].
+
+[ref02]: https://education.rstudio.com/blog/2020/07/teaching-the-tidyverse-in-2020-part-1-getting-started/
+[ref03]: chrome-extension://efaidnbmnnnibpcajpcglclefindmkaj/https://www.bioconductor.org/help/course-materials/2006/rforbioinformatics/labs/thurs/DBI-howto.pdf 
+
+
+## creating the MIMIC III database from the demo folder 
+### create a new SQLite database file
+```{r}
+con <- dbConnect(SQLite(), "mimic_demo.db")
+
+admissions <- read_csv(
+  "~/Documents/Spring 26/MEDB-5530/data/mimic-iii-demo/ADMISSIONS.csv"
+)
+
+dbWriteTable(con, "admissions", admissions, overwrite = TRUE)
+```
+## explanation of functions used
+[dbWriteTable][ref04] is a way to take a csv file and translate it into a database form that R will recognize. If you do not have a database, much like the downloaded demo for the MIMIC III data, this is required. Please note that this just translated a single data table (admissions) from the MIMIC III data. 
+
+[ref04]: https://www.rdocumentation.org/packages/DBI/versions/1.2.2/topics/dbWriteTable
+
+# Q1. Read the admissions table and display the first ten records and the following fields.
+  –Admission_type (self-explanatory)
+  –Admission_location (self-explanatory)
+  –Discharge_location (self-explanatory)
+  –Insurance (self-explanatory)
+```{r}
+#| label: admissions_data
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+admissions <- dbGetQuery(conn=cox, "
+    select 
+      admission_type,
+      admission_location,
+      discharge_location,
+      insurance
+    from admissions
+    LIMIT 10;
+")
+admissions
+dbDisconnect(cox)
+```
+
+## interpretation of output
+The above table shows the Admissions data for the first 10 patients. In this table, only the selected fields of admission type, admission location, discharge location, and insurance are shown. There are 10 rows and 4 columns. 
+
+## explanation of functions used
+The [select][ref05] function used in SQL retrieves the rows from the database. The select function must be used first, and essentailly tells the query what to find. If an * is used, all columns/rows will be returned. If select is followed by field names, such as in Q1, then it will only return the listed columns.
+
+The [from][ref05] function is used with the select function to tell the query where the data can be found. It is generally listed in the format of FROM database.datatable. 
+
+[ref05]: https://learn.microsoft.com/en-us/sql/t-sql/queries/select-transact-sql?view=sql-server-ver17
+
+# Q2. Read the admissions table and rename the column insurance to admission_insurance.  Display the first ten records.
+```{r}
+#| label: renaming
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+admissions <- dbGetQuery(conn=cox, "
+    select
+      insurance as admission_insurance
+    from admissions
+    LIMIT 10;
+")
+admissions
+dbDisconnect(cox)
+```
+## interpreting the output
+Above is the table showing the renaming of the field name Insurance to admission_insurance. There are 10 rows and 1 column. 
+
+## explantation of keywords used
+The [as][ref06] keyword is used to change the indicated field name. This can be used to rename/change multiple field names in the same chunk. 
+
+[ref06]: https://learn.microsoft.com/en-us/sql/t-sql/language-elements/reserved-keywords-transact-sql?view=sql-server-ver17

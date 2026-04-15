@@ -1,0 +1,129 @@
+---
+title: "todd-5530-M5"
+author: "Reagan Todd"
+format: 
+  html:
+    embed-resources: true
+execute: 
+  error: true
+---
+## File details
+This program (created 2026-03-06 by Reagan Todd) shows a brief introduction 
+to single row functions in SQL. This belongs in the public domain so please 
+use however you see fit.
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+R.version.string
+Sys.Date()
+library(tidyverse)
+library(DBI)
+library(RSQLite)
+library(readr)
+```
+# Q1 Use MIMIC-III Database
+## a. Round the value 29.526 to two decimal places.
+```{r}
+#| label: rounding
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+rounding <- dbGetQuery(conn=cox, "
+    select round(29.526, 2);
+    ")
+rounding
+dbDisconnect(cox)
+```
+### Interpretation of results
+29.526 rounded to 2 decimal places using the round() is 29.53
+
+## Helpful links for tackling rounding
+[Round][ref1] function allows for us to round a numeric values within our SQL 
+query. It also allows for better readability and control in displaying numbers.
+
+[ref1]: https://hightouch.com/sql-dictionary/sql-round
+
+## b. Truncate the value 29.526 to zero decimal places.
+```{r}
+#| label: truncating
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+truncating <- dbGetQuery(conn=cox, "
+    select cast(29.526 as INT);
+    ")
+truncating
+dbDisconnect(cox)
+```
+### Interpretation of results
+Truncating 29.526 provides us with an output of 29. This essentally removes the
+decimal places. 
+
+## Helpful links to truncation
+The SQLite in R does not allow for the use of [TRUNC()][ref2] like it does in 
+snowflake so we must use [CAST()][ref3]. Truncation allows for the removal of 
+decimal places, whereas cast removes decimals, forces values to 
+behave differently (text as number) or changes numeric precision.
+
+[ref2]: https://www.scaler.com/topics/trunc-function-in-sql/
+[ref3]: https://www.scaler.com/topics/sql-cast/
+
+## c. Calculate the remainder of the value 2500 after it is divided by 500
+```{r}
+#| label: remainder
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+remainder <- dbGetQuery(conn=cox, "
+    select (2500 % 500);
+    ")
+remainder
+dbDisconnect(cox)
+```
+### Interpretation of results
+The output of 0 shows that there should be no remainders as 500 can go into
+2500 5 times. 
+
+## Helpful link to tackling remainders
+SQLite uses % for division whereas other DBMS use the MOD() function. [Both][ref4] allow
+for us to divide one number by another and find the remainder. Either function is
+not great with handling null values. 
+
+[ref4]: https://www.sherloqdata.io/sql-functions/mod-in-sql
+
+# Q2. Use MIMIC-III Database. Decode Admission Type in admissions Table. Admission_type has values like:
+EMERGENCY
+URGENT
+ELECTIVE
+Others
+Map them:
+EMERGENCY Visit
+URGENT Visit
+Scheduled Admission
+Others
+```{r}
+#| label: decoding
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+admission_category <- dbGetQuery(cox, "
+select
+    admission_type,
+    case
+        when admission_type = 'EMERGENCY' then 'Emergency Visit'
+        when admission_type = 'URGENT' then 'Urgent Visit'
+        when admission_type = 'ELECTIVE' then 'Scheduled Admission'
+        else 'Others'
+    end AS admission_category
+from admissions
+limit 10;
+")
+admission_category
+dbDisconnect(cox)
+```
+### Interpretation of results
+Using the case function allows us to categorize our admission types into 
+admission categories. This results in an if/then/else format to match the cases
+found in admission_type to our provided admission_category. 
+
+## Helpful links for case/decode
+SQLite uses [case][ref6] where we formulate an when/else structure to get our
+categories. Snowflake uses [decode][ref7] where we provide the provided name seperated 
+by a comma then our preffered name. 
+
+[ref6]: https://hightouch.com/sql-dictionary/sql-case
+[ref7]: https://hightouch.com/sql-dictionary/sql-decode

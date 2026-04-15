@@ -1,0 +1,155 @@
+---
+title: "todd_5530_m8"
+author: "Reagan Todd"
+format:
+  html:
+    embed-resources: true
+execute: 
+  error: true
+---
+### This is a demonstration of how to join tables in SQL and select rows.                             Created 2026-04-03 by Reagan Todd.                                                                       The copyright is for educational uses only. 
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+R.version.string
+Sys.Date()
+library(tidyverse)
+library(DBI)
+library(RSQLite)
+library(readr)
+```
+
+# Use the MIMIC-III Schema.
+# Q1. Retrieve patient gender and admission time for 10 rows.                                           Hint: Join patients and admissions to get info.
+## First we need to ensure the database is loaded correctly.
+```{r}
+#| label: patients-admissions
+con <- dbConnect(SQLite(), "mimic_demo.db")
+
+patients <- read_csv(
+  "~/Documents/Spring 26/MEDB-5530/data/mimic-iii-demo/PATIENTS.csv"
+)
+
+dbWriteTable(con, "patients", patients, overwrite = TRUE)
+
+admissions <- read_csv(
+  "~/Documents/Spring 26/MEDB-5530/data/mimic-iii-demo/ADMISSIONS.csv"
+)
+
+dbWriteTable(con, "admissions", admissions, overwrite = TRUE)
+glimpse(patients)
+glimpse(admissions)
+```
+## Now we can do a Left join so that we can retain the patient information but add the admission time if available.
+```{r}
+#| label: left-join
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+patient_admittime <- dbGetQuery(conn=cox, "
+SELECT 
+  a.subject_id, 
+  p.gender, 
+  datetime(a.admittime, 'unixepoch') AS admittime_dt
+FROM admissions a
+LEFT JOIN patients p
+  ON a.subject_id = p.subject_id
+LIMIT 10;
+")
+
+patient_admittime
+dbDisconnect(cox)
+```
+### Interpretation of the results
+We now have a table that shows the subject ID, the patients gender, and the 
+time that the patient was admitted for the first 10 patients. 
+
+#### Interpretation of the code
+Same as Module 6, we have to convert the unixepoch date into a format that we
+as humans can easily identify, that is why we created the admittime_dt to see
+exactly what date that patient was admitted. 
+
+# Q2. Get a count of the number of records in the patients table and admissions                       table. How many rows will be retrieved if you do a cross join for patient                                and admissions table.
+```{r}
+#| label: countsa
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+counts_a <- dbGetQuery(conn=cox, "
+SELECT COUNT(*) AS total_admissions FROM admissions;
+")
+
+counts_a
+dbDisconnect(cox)
+```
+```{r}
+#| label: countsb
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+counts_p <- dbGetQuery(conn=cox, "
+SELECT COUNT(*) AS total_patients FROM patients;
+")
+
+counts_p
+dbDisconnect(cox)
+```
+### Interpretation of output
+The admissions data has 129 rows and the patients data has 100 rows. If we were
+to do a cross-join, we should have 129*100= 12,900 rows. After checking below,
+we can see that we now have 12,900 rows. 
+
+```{r}
+#| label: cross-join
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+crossjoin <- dbGetQuery(conn=cox, "
+SELECT COUNT(*) AS total_rows
+FROM patients p
+CROSS JOIN admissions a;
+")
+
+crossjoin
+dbDisconnect(cox)
+```
+
+# Q3. List all admissions that do not have a diagnosis.                                                  Hint: Use LEFT JOIN + WHERE d.icd9_code IS NULL.
+## Checking that diagnosis database is loaded.
+```{r}
+#| label: checking-diagnosis
+diagnosis <- read_csv(
+  "~/Documents/Spring 26/MEDB-5530/data/mimic-iii-demo/DIAGNOSES_ICD.csv"
+)
+
+dbWriteTable(con, "diagnosis", diagnosis, overwrite = TRUE)
+glimpse(diagnosis)
+```
+## Checking the count of null values first 
+```{r}
+#| label: checking-null
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+null <- dbGetQuery(conn=cox, "
+SELECT COUNT(*) AS missing_icd9
+FROM diagnosis
+WHERE icd9_code IS NULL;
+")
+
+null
+dbDisconnect(cox)
+```
+## There were no null values, so we should see an empty table here.
+```{r}
+#| label: null-icd
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+null_icd <- dbGetQuery(conn=cox, "
+SELECT a.subject_id, a.hadm_id, d.icd9_code
+FROM admissions a
+LEFT JOIN diagnosis d
+ON a.subject_id = d.subject_id AND a.hadm_id = d.hadm_id
+WHERE d.icd9_code IS NULL;
+")
+
+null_icd
+dbDisconnect(cox)
+```
+### Interpretation of output
+There were no missing icd_9 codes within this dataset. The first chunk of code
+checked to see if there were, but then we used a left join to answer the question
+to show that there are no null icd-9 codes therefore we are left with a table 
+that has 3 columns (subject ID, hadm ID, and icd-9) but 0 rows because there are
+no null values. 

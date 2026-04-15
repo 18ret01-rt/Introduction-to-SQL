@@ -1,0 +1,193 @@
+---
+title: "todd_5530_m6"
+author: "Reagan Todd"
+format: 
+  html:
+    embed-resources: true
+execute: 
+  error: true
+---
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+R.version.string
+Sys.Date()
+library(tidyverse)
+library(DBI)
+library(RSQLite)
+library(readr)
+```
+
+### This is a demonstration of how to join tables in SQL created
+### 2026-03-27 by Reagan Todd. The copyright is for educational uses only. 
+
+# Q1. Use the labevents table in the MIMICIII to select glucose levels (WHERE itemid = 50809). Use CASE WHEN to categorize glucose levels, if valuenum > 140 categorize as 'High' otherwise categorize as 'Normal_or_Low'.
+### First we need to add labevents to our MIMICIII database:
+```{r}
+#| label: labevents-import
+con <- dbConnect(SQLite(), "mimic_demo.db")
+
+labevents <- read_csv(
+  "~/Documents/Spring 26/MEDB-5530/data/mimic-iii-demo/LABEVENTS.csv"
+)
+
+dbWriteTable(con, "labevents", labevents, overwrite = TRUE)
+```
+### Now we can categorize the glucose
+```{r}
+#| label: categorize-glucose
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+labevents <- dbGetQuery(conn=cox, "
+SELECT
+  subject_id,
+  valuenum AS glucose,
+  CASE
+    WHEN valuenum > 140 THEN 'High'
+    ELSE 'Normal_or_low'
+  END AS glucose_category
+FROM labevents
+WHERE itemid = 50809 -- Glucose
+AND valuenum IS NOT NULL
+LIMIT 10;")
+
+labevents
+dbDisconnect(cox)
+```
+### Interpretation of output
+We can now see that we have the glucose value and a glucose category. 
+In just the first 10 rows, we can see that we only have two values under 140
+those are categories "Normal_or_low" and we have eight of "High" category. 
+Just from the first 10 rows we can see that the case-when conditional formatting
+worked. 
+
+#### Interpretation of code
+Here we see subject ID, glucose level and the glucose category. We categorized
+the glucose into category using the [case where][ref01] where we stated that
+if the valuenum (glucose) was >140 then show in category high show in the category of normal or low. A good reference to understanding case-when and
+else can be found [here][ref02]. 
+
+[ref01]:https://hightouch.com/sql-dictionary/sql-case
+[ref02]:https://www.thoughtspot.com/sql-tutorial/sql-case
+
+# Q2. Use INNER JOIN in MIMIC-III to join patients table and and Admissions table. Get age, gender and admission details for patients. (limit 10 rows)
+### First I want to ensure that my data is loaded correctly for patients
+### and admissions. 
+```{r}
+#| label: patients-admissions
+con <- dbConnect(SQLite(), "mimic_demo.db")
+
+patients <- read_csv(
+  "~/Documents/Spring 26/MEDB-5530/data/mimic-iii-demo/PATIENTS.csv"
+)
+
+dbWriteTable(con, "patients", patients, overwrite = TRUE)
+
+admissions <- read_csv(
+  "~/Documents/Spring 26/MEDB-5530/data/mimic-iii-demo/ADMISSIONS.csv"
+)
+
+dbWriteTable(con, "admissions", admissions, overwrite = TRUE)
+```
+### Now we can inner join
+#### Note this will find the age at admission due to it not being provided.
+```{r}
+#| label: inner-join
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+patients_admissions <- dbGetQuery(conn=cox, "
+SELECT
+  p.subject_id,
+  p.gender,
+  a.hadm_id,
+  a.admittime,
+  a.dischtime,
+  p.dob,
+  DATE(p.dob, 'unixepoch') AS birth_date,
+  DATE(a.admittime, 'unixepoch') AS admit_date,
+  CAST(strftime('%Y', a.admittime, 'unixepoch') AS INTEGER) AS admit_year,
+  ROUND(
+    (julianday(a.admittime, 'unixepoch') - julianday(p.dob, 'unixepoch')) / 365.25,
+    1
+  ) AS age_at_admit
+FROM patients p
+INNER JOIN admissions a
+  ON p.subject_id = a.subject_id
+LIMIT 10; ")
+
+
+patients_admissions 
+dbDisconnect(cox)
+```
+### Interpretation of output
+Here we now have an age_at_admit column. This shows the
+age at which a person was when they were admitted in years. For the first 10 rows we can see most participants were in their 70's or 80's with a few under 50. The age of 300 represents an individual who was older than 89 years of age at admission. 
+
+#### Interpretation of code
+[Date][ref03] is the SQLite version of the TO_DATE as shown in lecture. It returns the date as text format of YYYY-MM-DD.
+[CAST][ref04] allowed us to change the format of admit_year from any other format into an integer.  
+[julianday][ref03] this is the julian day, the fractional number since a reference day. 
+[unixepoch][ref03] returns a unix timestamp which is seen in some of the records where we get the number of seconds since a predetermined date. 
+Lastly, the [strftime()][ref03] function for '%Y' returns just the year, since we wanted to calculate age we can use the year to determine that. 
+
+[ref03]:https://sqlite.org/lang_datefunc.html
+[ref04]:https://www.dbvis.com/thetable/sql-cast-function-everything-you-need-to-know/
+
+# Q3. Use the MIMICIII schema and write a SQL query that will list all the table names.
+```{r}
+#| label: table-names
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+table_names <- dbGetQuery(conn=cox, "
+SELECT name AS table_name
+FROM sqlite_master
+WHERE type='table'
+ORDER BY name; ")
+
+table_names
+dbDisconnect(cox)
+```
+### Interpretation of output
+As you can see, we have only used the three tables as shown above. This version shows just the tables that I have created in the past 6 modules using the MIMICIII database. 
+
+## Using the mimiciii.db provided, we can see all of the tables in mimiciii. 
+```{r}
+#| label: entire-db
+cox <- dbConnect(SQLite(), "~/Documents/Spring 26/MEDB-5530/data/mimiciii.db")
+
+tables <- dbGetQuery(conn=cox, "
+  SELECT name AS table_name
+  FROM sqlite_master
+  WHERE type='table'
+  ORDER BY name;
+")
+
+tables
+dbDisconnect(cox)
+```
+# Q4. Use the MIMICIII schema and write a SQL query that will list all the field names in the admissions table.
+```{r}
+#| label: admissions-fields
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+table_fields <- dbGetQuery(conn=cox, "
+PRAGMA table_info('admissions'); ")
+
+table_fields
+dbDisconnect(cox)
+```
+### Interpretation of output
+Now we see the 19 columns as fields from the admissions data. This lists all of the columns. This is very similar to the R version of "colnames()". 
+
+#### Interpretation of code
+Here I used [PRAGMA_table_info][ref08] this allows us to return a single row for each column name. This is specific to SQLite and is comparable to the function information_schema.columns shown in lecture. If we just want to see the list of column names, use the syntax below. 
+
+[ref08]:https://sqlite.org/pragma.html#pragma_table_xinfo
+
+```{r}
+#| label: admissions-field
+cox <- dbConnect(SQLite(), "mimic_demo.db")
+table_field <- dbGetQuery(conn=cox, "
+SELECT name
+FROM pragma_table_info('admissions'); ")
+
+table_field
+dbDisconnect(cox)
+```
